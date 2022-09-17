@@ -12,9 +12,10 @@ recFindCoin(Str, ZeroCount, Count) ->
   Prefix = string:concat("aditya.subramani;", Str),
   Coin = string:concat(Prefix, erlang:integer_to_list(Count, 36)),
   CoinHash = hash(Coin),
-  Result = string:substr(CoinHash, 1, ZeroCount) == lists:flatten(lists:duplicate(ZeroCount, "0")),
+  IsValidCoin = string:substr(CoinHash, 1, ZeroCount) == lists:flatten(lists:duplicate(ZeroCount, "0")),
   if 
-    Result == true -> io:fwrite(string:concat(string:concat(Coin, " : "), CoinHash));
-    Result == false -> recFindCoin(Str, ZeroCount, Count + 1)
-  end.
+    IsValidCoin == true -> Result = string:concat(string:concat(Coin, " : "), CoinHash);
+    IsValidCoin == false -> Result = recFindCoin(Str, ZeroCount, Count + 1)
+  end,
+  Result.
 
