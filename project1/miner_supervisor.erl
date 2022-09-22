@@ -1,34 +1,40 @@
 -module(miner_supervisor).
 -import(miner,[findCoin/0]).
--export([start/4]).
+-export([start/1]).
 
 
-start(ZeroCount, WorkerCount, StartNumber, EndNumber) -> 
-  io:format("Start:  ZeroCount:: ~p\t WorkerCount:: ~p \n", [ZeroCount, WorkerCount]),
-  statistics(runtime),
-  WorkerProcessArray = spawnMiner(ZeroCount, WorkerCount, WorkerCount, array:new(), StartNumber, EndNumber),
-  collectResult(array:new(0), WorkerCount, WorkerProcessArray).
+
+start(ServerName) ->
+  WorkerCount = 4,
+  %net_adm:ping(ServerName),
+  MinerServerId = rpc:call(ServerName, erlang, whereis, [server]),
+  MinerServerId ! {self(), {request}},
+  receive
+    {ServerId, {ZeroCount, StartNumber, EndNumber}} ->
+      io:format("Start:  ZeroCount:: ~p\t WorkerCount:: ~p \n", [ZeroCount, WorkerCount]),
+      statistics(runtime),
+      WorkerProcessArray = spawnMiner(ZeroCount, WorkerCount, WorkerCount, array:new(), StartNumber, EndNumber),
+      collectResult(ServerId, WorkerCount, WorkerProcessArray)
+  end,
+  start(ServerName).
 
 
-collectResult(ResultArray, WorkerCount, WorkerProcessArray) ->
+collectResult(ServerId, WorkerCount, WorkerProcessArray) ->
   receive
     {MinerId, {done}} ->
-      io:format("Miner (~p) did not find coin \n", [MinerId]),
       exit(MinerId, kill),
       AllWorkersTerminated = terminateWorkers(WorkerProcessArray, WorkerCount),
       if 
         AllWorkersTerminated == true ->
-          io:format("AllWorkersTerminated \n"),
-          ResultArray;
+          io:format("AllWorkersTerminated ~p\n", [self()]);
         true -> 
-          collectResult(ResultArray, WorkerCount, WorkerProcessArray)
+          collectResult(ServerId, WorkerCount, WorkerProcessArray)
       end;
     {_MinerId, {Result}} ->
-      io:format(Result),
-      %NewResultArray = array:set(array:size(ResultArray) + 1, Result, ResultArray),
-      collectResult(ResultArray, WorkerCount, WorkerProcessArray);
+      ServerId ! {self(), {coin, Result}},
+      collectResult(ServerId, WorkerCount, WorkerProcessArray);
     _X ->
-      ResultArray
+      ok
   end.
 
 
@@ -53,9 +59,6 @@ terminateWorkers(WorkerProcessArray, WorkerId) ->
       Process = whereis(list_to_atom(ProcessName)),
       if
         Process /= undefined -> 
-          io:fwrite("Main: sending termiante signal to ~p\n", [Process]),
-          %exit(Process, kill),
-          %terminateWorkers(WorkerProcessArray, WorkerId - 1)
           false;
         true ->
           terminateWorkers(WorkerProcessArray, WorkerId - 1)
