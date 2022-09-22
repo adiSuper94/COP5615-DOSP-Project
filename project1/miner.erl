@@ -8,20 +8,26 @@ hash(Str) -> format("~64.16.0b", [decode_unsigned(hash(sha256, Str))]).
 
 findCoin() ->
   receive
-    {MinerSupervisorId, {Id, ZeroCount, WorkerCount}} -> 
-      io:format("Worker(~p): Received Message: ~pfrom: ~p \n ", [self(), {Id, ZeroCount, WorkerCount}, MinerSupervisorId]),
-      Result = recFindCoin(ZeroCount, WorkerCount, Id),
-      MinerSupervisorId ! {self(), {Result}}
+    {MinerSupervisorId, {Id, ZeroCount, WorkerCount, StartNumber, EndNumber}} -> 
+      io:format("Worker(~p): Received Message: ~pfrom: ~p \n ", [self(), {Id, ZeroCount, WorkerCount, StartNumber, EndNumber}, MinerSupervisorId]),
+      recFindCoin(MinerSupervisorId, ZeroCount, WorkerCount, StartNumber + Id, EndNumber)
   end.
 
-recFindCoin(ZeroCount, WorkerCount, Counter) ->
+recFindCoin(MinerSupervisorId, ZeroCount, WorkerCount, Counter, EndNumber) ->
   Prefix = "aditya.subramani;",
   Coin = string:concat(Prefix, lists:flatten(to_base_string(Counter, 64))),
   CoinHash = hash(Coin),
   IsValidCoin = string:substr(CoinHash, 1, ZeroCount) == lists:flatten(lists:duplicate(ZeroCount, "0")),
   if
-    IsValidCoin == true ->  string:concat(string:concat(Coin, " : "), CoinHash);
-    true -> recFindCoin(ZeroCount, WorkerCount, Counter + WorkerCount)
+    IsValidCoin == true ->
+      Result = string:concat(string:concat(Coin, " : "), CoinHash),
+      MinerSupervisorId ! {self(), {Result}};
+    true -> ok
+  end,
+
+  if
+    Counter >= EndNumber + WorkerCount -> MinerSupervisorId ! {self(), {done}};
+    true -> recFindCoin(MinerSupervisorId, ZeroCount, WorkerCount, Counter + WorkerCount, EndNumber)
   end.
 
 % From https://gist.github.com/Fabsolute/7e3a442e5f01bcbf32f5843bb8948525

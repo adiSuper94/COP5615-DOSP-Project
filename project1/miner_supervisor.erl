@@ -1,28 +1,46 @@
 -module(miner_supervisor).
 -import(miner,[findCoin/0]).
--export([start/2]).
+-export([start/4]).
 
 
-start(ZeroCount, WorkerCount) -> 
+start(ZeroCount, WorkerCount, StartNumber, EndNumber) -> 
   io:format("Start:  ZeroCount:: ~p\t WorkerCount:: ~p \n", [ZeroCount, WorkerCount]),
-  WorkerProcessArray = spawnMiner(ZeroCount, WorkerCount, WorkerCount, array:new()),
+  statistics(runtime),
+  WorkerProcessArray = spawnMiner(ZeroCount, WorkerCount, WorkerCount, array:new(), StartNumber, EndNumber),
+  collectResult(array:new(0), WorkerCount, WorkerProcessArray).
+
+
+collectResult(ResultArray, WorkerCount, WorkerProcessArray) ->
   receive
-    X ->
-      io:format("\nTerminating all workers :: ~p\n", [WorkerCount]),
-      terminateWorkers(WorkerProcessArray, WorkerCount),
-      io:format("\nTerminated all workers :: ~p\n", [WorkerCount]),
-      X 
+    {MinerId, {done}} ->
+      io:format("Miner (~p) did not find coin \n", [MinerId]),
+      exit(MinerId, kill),
+      AllWorkersTerminated = terminateWorkers(WorkerProcessArray, WorkerCount),
+      if 
+        AllWorkersTerminated == true ->
+          io:format("AllWorkersTerminated \n"),
+          ResultArray;
+        true -> 
+          collectResult(ResultArray, WorkerCount, WorkerProcessArray)
+      end;
+    {_MinerId, {Result}} ->
+      io:format(Result),
+      %NewResultArray = array:set(array:size(ResultArray) + 1, Result, ResultArray),
+      collectResult(ResultArray, WorkerCount, WorkerProcessArray);
+    _X ->
+      ResultArray
   end.
 
-spawnMiner(ZeroCount, WorkerCount, WorkerId, WorkerProcessArray) ->
+
+spawnMiner(ZeroCount, WorkerCount, WorkerId, WorkerProcessArray, StartNumber, EndNumber) ->
   if
     WorkerId > 0 -> 
       WorkerProcess = spawn(miner, findCoin, []),
-      WorkerProcess ! {self(), {WorkerId, ZeroCount, WorkerCount}},
+      WorkerProcess ! {self(), {WorkerId, ZeroCount, WorkerCount, StartNumber, EndNumber}},
       ProcessName = string:concat("miner_worker", erlang:integer_to_list(WorkerId, 10)),
       register(list_to_atom(ProcessName), WorkerProcess),
       NewWorkerProcessArray = array:set(WorkerId, ProcessName ,WorkerProcessArray),
-      spawnMiner(ZeroCount, WorkerCount, WorkerId - 1, NewWorkerProcessArray);
+      spawnMiner(ZeroCount, WorkerCount, WorkerId - 1, NewWorkerProcessArray, StartNumber, EndNumber);
     true -> 
       WorkerProcessArray
   end.
@@ -34,12 +52,15 @@ terminateWorkers(WorkerProcessArray, WorkerId) ->
       ProcessName = array:get(WorkerId, WorkerProcessArray),
       Process = whereis(list_to_atom(ProcessName)),
       if
-        Process == undefined ->
-          terminateWorkers(WorkerProcessArray, WorkerId - 1);
-        true ->
+        Process /= undefined -> 
           io:fwrite("Main: sending termiante signal to ~p\n", [Process]),
-          exit(Process, kill),
+          %exit(Process, kill),
+          %terminateWorkers(WorkerProcessArray, WorkerId - 1)
+          false;
+        true ->
           terminateWorkers(WorkerProcessArray, WorkerId - 1)
       end;
-    true -> ok 
+    true -> true 
   end.
+
+
