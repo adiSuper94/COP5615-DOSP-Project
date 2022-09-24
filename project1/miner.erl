@@ -19,17 +19,19 @@ recFindCoin(MinerSupervisorId, ZeroCount, WorkerCount, Counter, EndNumber) ->
   CoinHash = hash(Coin),
   IsValidCoin = string:substr(CoinHash, 1, ZeroCount) == lists:flatten(lists:duplicate(ZeroCount, "0")),
   if
-    IsValidCoin == true ->
-      Result = string:concat(string:concat(Coin, " : "), CoinHash),
-      MinerSupervisorId ! {self(), {Result}};
-    true -> ok
-  end,
-
-  if
-    Counter >= EndNumber + WorkerCount -> MinerSupervisorId ! {self(), {done}};
-    true -> recFindCoin(MinerSupervisorId, ZeroCount, WorkerCount, Counter + WorkerCount, EndNumber)
+    Counter >= EndNumber + WorkerCount ->
+      MinerSupervisorId ! {self(), {done}};
+    true -> 
+      if
+        IsValidCoin == true ->
+          Result = string:concat(string:concat(Coin, " : "), CoinHash),
+          MinerSupervisorId ! {self(), {Result}};
+        true -> 
+          recFindCoin(MinerSupervisorId, ZeroCount, WorkerCount, Counter + WorkerCount, EndNumber)
+      end
   end.
 
+  
 % From https://gist.github.com/Fabsolute/7e3a442e5f01bcbf32f5843bb8948525
 get_base_char(Index, Lookup) ->
   [lists:nth(Index + 1, Lookup)].
