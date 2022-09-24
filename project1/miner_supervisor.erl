@@ -1,12 +1,10 @@
 -module(miner_supervisor).
 -import(miner,[findCoin/0]).
--export([start/1]).
+-export([start/2]).
 
 
-
-start(ServerName) ->
-  WorkerCount = 4,
-  %net_adm:ping(ServerName),
+start(ServerName, WorkerCount) ->
+  net_adm:ping(ServerName),
   MinerServerId = rpc:call(ServerName, erlang, whereis, [server]),
   MinerServerId ! {self(), {request}},
   receive
@@ -16,7 +14,7 @@ start(ServerName) ->
       WorkerProcessArray = spawnMiner(ZeroCount, WorkerCount, WorkerCount, array:new(), StartNumber, EndNumber),
       collectResult(ServerId, WorkerCount, WorkerProcessArray)
   end,
-  start(ServerName).
+  start(ServerName, WorkerCount).
 
 
 collectResult(ServerId, WorkerCount, WorkerProcessArray) ->
