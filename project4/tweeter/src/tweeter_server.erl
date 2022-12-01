@@ -50,9 +50,11 @@ followUser(UserProcessId, Handle, LoggedInUsers) ->
 
 notifyLoggedInUsers(LoggedInUsers, Message, Tweeter) ->
     Followers = pgSelect("SELECT er from followers WHERE ee = $1", [Tweeter]),
+    io:format("Folowers: ~p \n LoggedInUsers: ~p", [Followers, LoggedInUsers]),
     maps:fold(
-      fun(UserProcessId, Handle, ok) -> 
-        ListContains = lists:member(Handle, Followers),
+      fun(UserProcessId, Handle, _) -> 
+        io:format("UPI: ~p \n H: ~p", [UserProcessId, Handle]),
+        ListContains = lists:member({erlang:list_to_bitstring(Handle)}, Followers),
         if
           ListContains ->
             UserProcessId! {self(), liveFeed, Message},
