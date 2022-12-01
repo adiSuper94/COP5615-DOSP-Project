@@ -19,7 +19,10 @@ initServer(LoggedInUsers) ->
       getAllTweets(UserProcessId, LoggedInUsers);
     {UserProcessId, {follow, Handle}} ->
         NewLoggedInUsers = LoggedInUsers,
-        followUser(UserProcessId, Handle, LoggedInUsers)
+        followUser(UserProcessId, Handle, LoggedInUsers);
+    {UserProcessId, {retweet, Id}} -> 
+      NewLoggedInUsers = LoggedInUsers,
+      retweet(UserProcessId, Id, LoggedInUsers)
   end,
   initServer(NewLoggedInUsers).
 
@@ -47,6 +50,11 @@ getAllTweets(UserProcessId, LoggedInUsers) ->
 followUser(UserProcessId, Handle, LoggedInUsers) -> 
     ER = maps:get(UserProcessId, LoggedInUsers),
     pgInsert("INSERT INTO followers(ee, er) VALUES ($1, $2) RETURNING *", [Handle, ER]).
+
+retweet(UserProcessId, Id, LoggedInUsers) ->
+  TweetRow = pgSelect("SELECT tweet from tweets WHERE id = $1", [Id]),
+  Tweet = erlang:bitstring_to_list(erlang:element(1, TweetRow)),
+  tweet(UserProcessId, Tweet, LoggedInUsers).
 
 notifyLoggedInUsers(LoggedInUsers, Message, Tweeter) ->
     Followers = pgSelect("SELECT er from followers WHERE ee = $1", [Tweeter]),
