@@ -1,5 +1,9 @@
 -module(tweeter_server).
--export([initServer/1]).
+-export([initServer/0]).
+
+initServer() ->
+  register(server, self()),
+  initServer(maps:new()).
 
 initServer(LoggedInUsers) -> 
   receive
@@ -19,9 +23,10 @@ initServer(LoggedInUsers) ->
   end,
   initServer(NewLoggedInUsers).
 
-registerUser(UserProcessId, Handle, LoggedInUsers) -> 
-    pgInsert("INSERT INTO tweeters (handle) VALUES ($1) RETURNING *", [Handle]),
-    loginUser(UserProcessId, Handle, LoggedInUsers).
+registerUser(UserProcessId, Handle, LoggedInUsers) ->
+  io:format("registering user ~p \n", [Handle]),
+  pgInsert("INSERT INTO tweeters (handle) VALUES ($1) RETURNING *", [Handle]),
+  loginUser(UserProcessId, Handle, LoggedInUsers).
 
 loginUser(UserProcessId, Handle, LoggedInUsers) ->
   _Rows = pgSelect("SELECT * FROM tweeters WHERE handle = $1", [Handle]),
@@ -43,17 +48,26 @@ followUser(UserProcessId, Handle, LoggedInUsers) ->
     ER = maps:get(UserProcessId, LoggedInUsers),
     pgInsert("INSERT INTO followers(ee, er) VALUES ($1, $2) RETURNING *", [Handle, ER]).
 
-notifyLoggedInUsers(_LoggedInUsers, _Message, Tweeter) ->
-    _Followers = pgSelect("SELECT er from followers WHERE ee = $1", [Tweeter]),
-    io:format("notify").
+notifyLoggedInUsers(LoggedInUsers, Message, Tweeter) ->
+    Followers = pgSelect("SELECT er from followers WHERE ee = $1", [Tweeter]),
+    maps:fold(
+      fun(UserProcessId, Handle, ok) -> 
+        ListContains = lists:member(Handle, Followers),
+        if
+          ListContains ->
+            UserProcessId! {self(), liveFeed, Message},
+            io:format("Sent live notification to ~p (~p)", [Handle, UserProcessId]);
+          true -> false
+        end
+	    end, ok, LoggedInUsers).
 
 pgSelect(Query, Params) ->
   {ok, C} = epgsql:connect(#{ host => "localhost", username => "postgres", password => "postgres", database => "tweeter_db", port => 5432, timeout => 4000}),
-  {ok, _Columns, Rows} = epgsql:equery(Query, Params),
+  {ok, _Columns, Rows} = epgsql:equery(C, Query, Params),
   ok = epgsql:close(C),
   Rows.
 
 pgInsert(Query, Params) ->
   {ok, C} = epgsql:connect(#{ host => "localhost", username => "postgres", password => "postgres", database => "tweeter_db", port => 5432, timeout => 4000}),
-  {ok, _Count, _Coulumns, _Rows} = epgsql:equery(Query, Params),
+  {ok, _Count, _Coulumns, _Rows} = epgsql:equery(C, Query, Params),
   ok = epgsql:close(C).

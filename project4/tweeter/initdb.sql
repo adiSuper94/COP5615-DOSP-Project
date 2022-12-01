@@ -1,6 +1,6 @@
 CREATE TABLE tweeters(
   handle varchar(40) not null unique,
-  id bigserial primary key,
+  id bigserial primary key
 );
 
 CREATE TABLE tweets(
